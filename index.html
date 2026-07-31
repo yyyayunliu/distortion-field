@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#050505" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>DISTORTION FIELD</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="app">
+    <video id="camera" playsinline muted></video>
+    <canvas id="stage"></canvas>
+
+    <section id="permission" class="permission-panel">
+      <div class="permission-copy">
+        <p class="eyebrow">YSSEM LAB / REALITY DISTORTION FIELD</p>
+        <h1>DISTORTION<br />FIELD</h1>
+        <p>Reshape the space around you.</p>
+        <button id="startCamera" type="button">OPEN CAMERA</button>
+        <p class="fine-print">Camera access requires HTTPS or localhost.</p>
+      </div>
+    </section>
+
+    <header class="topbar">
+      <div class="brand-lockup">
+        <strong>DISTORTION FIELD</strong>
+        <span>REALITY FILTER / PROTOTYPE 02</span>
+      </div>
+      <div class="top-actions">
+        <div id="recordingBadge" class="recording-badge" hidden>
+          <i></i><span id="recordingTime">00:00</span>
+        </div>
+        <button id="switchCamera" class="icon-button" type="button" aria-label="Switch camera">↻</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Distortion controls">
+      <div class="mode-row" role="group" aria-label="Distortion mode">
+        <button type="button" class="mode active" data-mode="0">BEND</button>
+        <button type="button" class="mode" data-mode="1">BULGE</button>
+        <button type="button" class="mode" data-mode="2">TWIST</button>
+        <button type="button" class="mode" data-mode="3">WAVE</button>
+      </div>
+
+      <div class="slider-grid">
+        <label>
+          <span>STRENGTH <output id="strengthValue">0.24</output></span>
+          <input id="strength" type="range" min="0" max="1" step="0.01" value="0.24" />
+        </label>
+        <label>
+          <span>RADIUS <output id="radiusValue">0.42</output></span>
+          <input id="radius" type="range" min="0.08" max="1" step="0.01" value="0.42" />
+        </label>
+        <label>
+          <span>FREQUENCY <output id="frequencyValue">4.0</output></span>
+          <input id="frequency" type="range" min="0.5" max="12" step="0.1" value="4" />
+        </label>
+      </div>
+
+      <div class="utility-row">
+        <button id="randomize" type="button">RANDOM</button>
+        <button id="before" type="button">HOLD BEFORE</button>
+        <button id="reset" type="button">RESET</button>
+      </div>
+
+      <div class="capture-dock">
+        <div class="capture-mode" role="group" aria-label="Capture mode">
+          <button id="photoMode" type="button" class="active">PHOTO</button>
+          <button id="videoMode" type="button">VIDEO</button>
+        </div>
+        <div class="capture-row">
+          <button id="openLast" class="round-action" type="button" aria-label="Open last capture" disabled>
+            <span id="lastThumb">LAST</span>
+          </button>
+          <button id="shutter" class="shutter photo" type="button" aria-label="Take photo">
+            <span></span>
+          </button>
+          <button id="saveLast" class="round-action" type="button" aria-label="Save or share last capture" disabled>
+            SAVE
+          </button>
+        </div>
+        <p class="capture-hint" id="captureHint">Tap to photograph the distorted view.</p>
+      </div>
+    </section>
+
+    <section id="preview" class="preview" hidden aria-label="Captured media preview">
+      <div class="preview-head">
+        <div>
+          <strong id="previewTitle">CAPTURED</strong>
+          <span id="previewMeta"></span>
+        </div>
+        <button id="closePreview" class="icon-button" type="button" aria-label="Close preview">×</button>
+      </div>
+      <div id="previewFrame" class="preview-frame"></div>
+      <div class="preview-actions">
+        <button id="sharePreview" class="primary" type="button">SAVE / SHARE</button>
+        <button id="downloadPreview" type="button">DOWNLOAD FILE</button>
+      </div>
+      <p class="preview-note">On iPhone, choose “Save Image” or “Save Video” in the share sheet when available.</p>
+    </section>
+
+    <div id="flash" class="flash" aria-hidden="true"></div>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </main>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
