@@ -1,4 +1,4 @@
-# DISTORTION FIELD — Prototype 02.1
+# DISTORTION FIELD — Prototype 02.2
 
 A mobile-first reality filter by Yssem Lab. It turns a live phone-camera feed into bendable, bulging, twisting and waving architecture, then lets the user photograph or record the distorted result.
 
@@ -11,7 +11,8 @@ The original **UNBUILDABLE — Prototype 01** remains a separate project. This f
 - Collapsible distortion controls, leaving the camera view clear after setup
 - Camera switch control beside the shutter, using a two-arrow icon
 - Recording timer beside the bottom camera controls; hidden in photo mode
-- Separate **SAVE** and **SHARE** actions after capture
+- Distortion modes and sliders remain interactive while video is recording, so parameter changes are captured in the video
+- One combined **SAVE/SHARE** action after capture
 - Removed the previous download button and instructional note
 
 ## Features
@@ -29,9 +30,7 @@ The original **UNBUILDABLE — Prototype 01** remains a separate project. This f
 
 ## Save and share behavior
 
-**SAVE** uses the browser's native save-file picker where supported. Otherwise it saves the generated file through the browser's download system.
-
-**SHARE** opens the device's native share interface when file sharing is supported, allowing the result to be sent to contacts or social apps.
+**SAVE/SHARE** opens the device's native share sheet when file sharing is supported. On phones, the same sheet can offer saving to Photos or Files as well as sharing to contacts and social apps. If native file sharing is unavailable, the prototype falls back to the browser's file-save or download flow.
 
 A normal mobile website cannot guarantee direct, silent insertion into every device's Photos library. Browser and operating-system behavior differs, especially on iPhone. A future native iOS/Android wrapper could provide direct photo-library access.
 

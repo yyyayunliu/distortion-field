@@ -32,8 +32,7 @@ const previewFrame = document.querySelector('#previewFrame');
 const previewTitle = document.querySelector('#previewTitle');
 const previewMeta = document.querySelector('#previewMeta');
 const closePreviewButton = document.querySelector('#closePreview');
-const savePreviewButton = document.querySelector('#savePreview');
-const sharePreviewButton = document.querySelector('#sharePreview');
+const saveSharePreviewButton = document.querySelector('#saveSharePreview');
 
 let stream = null;
 let facingMode = 'environment';
@@ -545,29 +544,31 @@ async function saveLastCapture() {
   showStatus('Saved to your browser downloads.', 3200);
 }
 
-async function shareLastCapture() {
+async function saveOrShareLastCapture() {
   if (!lastCapture) return;
+
   const file = new File([lastCapture.blob], lastCapture.filename, {
     type: lastCapture.blob.type || (lastCapture.type === 'photo' ? 'image/jpeg' : 'video/webm'),
     lastModified: Date.now()
   });
-
   const shareData = { files: [file] };
+
+  // On supported phones this opens the system share sheet, where the user can
+  // save to Photos/Files or share to contacts and social apps.
   if (navigator.share && navigator.canShare?.(shareData)) {
     try {
       await navigator.share({
         files: [file],
-        title: 'Distortion Field',
-        text: 'Created with Distortion Field by Yssem Lab.'
+        title: 'Distortion Field'
       });
       return;
     } catch (error) {
       if (error?.name === 'AbortError') return;
-      console.warn('Native sharing failed.', error);
+      console.warn('Native save/share failed; falling back to file save.', error);
     }
   }
 
-  showStatus('File sharing is not supported in this browser.', 3800);
+  await saveLastCapture();
 }
 
 function downloadLastCapture() {
@@ -626,8 +627,7 @@ videoModeButton.addEventListener('click', () => setCaptureMode('video'));
 shutterButton.addEventListener('click', handleShutter);
 openLastButton.addEventListener('click', openPreview);
 closePreviewButton.addEventListener('click', closePreview);
-savePreviewButton.addEventListener('click', saveLastCapture);
-sharePreviewButton.addEventListener('click', shareLastCapture);
+saveSharePreviewButton.addEventListener('click', saveOrShareLastCapture);
 
 ['pointerdown', 'touchstart'].forEach((type) => {
   beforeButton.addEventListener(type, () => setBefore(true), { passive: true });
