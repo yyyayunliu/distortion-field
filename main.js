@@ -2,6 +2,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.m
 
 const video = document.querySelector('#camera');
 const canvas = document.querySelector('#stage');
+const vortexCanvas = document.querySelector('#vortexCanvas');
 const permission = document.querySelector('#permission');
 const startButton = document.querySelector('#startCamera');
 const switchButton = document.querySelector('#switchCamera');
@@ -52,6 +53,15 @@ let recordingMimeType = '';
 let lastCapture = null;
 let lastObjectUrl = '';
 let previewObjectUrl = '';
+let microphoneStream = null;
+let recordingStream = null;
+let recordingAudioTrack = null;
+let recordingHasAudio = false;
+let recordingStarting = false;
+let audioContext = null;
+let vortexRenderer = null;
+let vortexMaterial = null;
+let vortexRunning = true;
 
 const defaults = {
   mode: 0,
@@ -62,6 +72,173 @@ const defaults = {
 };
 
 const MAX_RECORDING_MS = 30_000;
+
+
+function initVortex() {
+  if (!vortexCanvas) return;
+
+  try {
+    vortexRenderer = new THREE.WebGLRenderer({
+      canvas: vortexCanvas,
+      antialias: false,
+      alpha: false,
+      powerPreference: 'high-performance'
+    });
+    vortexRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+
+    const vortexScene = new THREE.Scene();
+    const vortexCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    vortexMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uResolution: { value: new THREE.Vector2(1, 1) }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        varying vec2 vUv;
+        uniform float uTime;
+        uniform vec2 uResolution;
+
+        float hash(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+
+        void main() {
+          vec2 p = vUv - 0.5;
+          p.x *= uResolution.x / max(uResolution.y, 1.0);
+
+          float radius = length(p);
+          float angle = atan(p.y, p.x);
+          float breathing = sin(uTime * 0.55) * 0.12;
+          float spiralAngle = angle * 7.0 + log(radius + 0.035) * (12.5 + breathing) - uTime * 0.82;
+          float secondary = sin(angle * 3.0 - radius * 19.0 + uTime * 0.34) * 0.42;
+          float bands = 0.5 + 0.5 * sin(spiralAngle + secondary);
+          bands = smoothstep(0.29, 0.71, bands);
+
+          float funnel = smoothstep(0.015, 0.12, radius);
+          float edgeFade = 1.0 - smoothstep(0.48, 1.05, radius);
+          float centerGlow = exp(-radius * 19.0) * 0.44;
+          float grain = (hash(gl_FragCoord.xy + floor(uTime * 12.0)) - 0.5) * 0.035;
+          float shade = mix(0.018, 0.84, bands) * funnel * edgeFade + centerGlow + grain;
+
+          gl_FragColor = vec4(vec3(clamp(shade, 0.0, 1.0)), 1.0);
+        }
+      `
+    });
+
+    vortexScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), vortexMaterial));
+
+    const resizeVortex = () => {
+      if (!vortexRenderer || !vortexMaterial) return;
+      const width = Math.max(1, window.innerWidth);
+      const height = Math.max(1, window.innerHeight);
+      vortexRenderer.setSize(width, height, false);
+      vortexMaterial.uniforms.uResolution.value.set(width, height);
+    };
+
+    const animateVortex = (time = 0) => {
+      requestAnimationFrame(animateVortex);
+      if (!vortexRunning || !vortexRenderer || !vortexMaterial) return;
+      vortexMaterial.uniforms.uTime.value = time * 0.001;
+      vortexRenderer.render(vortexScene, vortexCamera);
+    };
+
+    resizeVortex();
+    window.addEventListener('resize', resizeVortex);
+    animateVortex();
+  } catch (error) {
+    console.warn('Animated vortex could not be initialized.', error);
+  }
+}
+
+function getAudioContext() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!audioContext) audioContext = new AudioContextClass();
+  if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+  return audioContext;
+}
+
+function playTone(context, startTime, duration, startFrequency, endFrequency, gainValue, wave = 'sine') {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = wave;
+  oscillator.frequency.setValueAtTime(startFrequency, startTime);
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, endFrequency), startTime + duration);
+  gain.gain.setValueAtTime(0.0001, startTime);
+  gain.gain.exponentialRampToValueAtTime(gainValue, startTime + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  oscillator.connect(gain).connect(context.destination);
+  oscillator.start(startTime);
+  oscillator.stop(startTime + duration + 0.02);
+}
+
+function playNoise(context, startTime, duration, gainValue) {
+  const frameCount = Math.max(1, Math.floor(context.sampleRate * duration));
+  const buffer = context.createBuffer(1, frameCount, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let index = 0; index < frameCount; index += 1) {
+    data[index] = (Math.random() * 2 - 1) * Math.exp(-index / Math.max(1, frameCount * 0.18));
+  }
+  const source = context.createBufferSource();
+  const filter = context.createBiquadFilter();
+  const gain = context.createGain();
+  source.buffer = buffer;
+  filter.type = 'bandpass';
+  filter.frequency.value = 1900;
+  filter.Q.value = 0.75;
+  gain.gain.setValueAtTime(gainValue, startTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+  source.connect(filter).connect(gain).connect(context.destination);
+  source.start(startTime);
+}
+
+function playUiSound(type) {
+  const context = getAudioContext();
+  if (!context) return;
+  const now = context.currentTime + 0.012;
+
+  // Synthesized camera cues: familiar in character, but not copied from Apple's samples.
+  if (type === 'photo') {
+    playNoise(context, now, 0.055, 0.19);
+    playTone(context, now, 0.07, 190, 82, 0.11, 'triangle');
+    playTone(context, now + 0.027, 0.045, 940, 520, 0.045, 'square');
+  } else if (type === 'record-start') {
+    playTone(context, now, 0.085, 620, 880, 0.075, 'sine');
+    playTone(context, now + 0.09, 0.075, 880, 1180, 0.065, 'sine');
+  } else if (type === 'record-stop') {
+    playTone(context, now, 0.09, 980, 660, 0.075, 'sine');
+    playTone(context, now + 0.095, 0.075, 660, 430, 0.06, 'sine');
+  }
+}
+
+async function ensureMicrophone() {
+  const activeTrack = microphoneStream?.getAudioTracks().find((track) => track.readyState === 'live');
+  if (activeTrack) return activeTrack;
+
+  try {
+    microphoneStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      },
+      video: false
+    });
+    return microphoneStream.getAudioTracks()[0] || null;
+  } catch (error) {
+    console.warn('Microphone access was unavailable.', error);
+    showStatus('Microphone unavailable. Recording video without sound.', 4200);
+    return null;
+  }
+}
 
 function showStatus(message, duration = 2200) {
   statusEl.textContent = message;
@@ -86,6 +263,7 @@ function updateUniforms() {
 
 async function startCamera() {
   try {
+    getAudioContext();
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('Camera access is not available in this browser.');
     }
@@ -105,6 +283,7 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
     permission.classList.add('hidden');
+    vortexRunning = false;
 
     if (!renderer) initThree();
     updateVideoSize();
@@ -305,7 +484,7 @@ function timestamp() {
 }
 
 function setCaptureMode(mode) {
-  if (isRecording()) return;
+  if (isRecording() || recordingStarting) return;
   captureMode = mode;
   const isPhoto = mode === 'photo';
   photoModeButton.classList.toggle('active', isPhoto);
@@ -328,6 +507,7 @@ async function takePhoto() {
   }
 
   renderer.render(scene, renderCamera);
+  playUiSound('photo');
   flashCamera();
 
   const blob = await new Promise((resolve) => {
@@ -345,15 +525,23 @@ async function takePhoto() {
   openPreview();
 }
 
-function selectRecordingMimeType() {
+function selectRecordingMimeType(hasAudio) {
   if (!window.MediaRecorder) return '';
-  const candidates = [
-    'video/mp4;codecs=avc1.42E01E',
-    'video/mp4',
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm'
-  ];
+  const candidates = hasAudio
+    ? [
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+        'video/mp4',
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm'
+      ]
+    : [
+        'video/mp4;codecs=avc1.42E01E',
+        'video/mp4',
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+      ];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || '';
 }
 
@@ -361,26 +549,41 @@ function isRecording() {
   return mediaRecorder?.state === 'recording';
 }
 
-function startRecording() {
+async function startRecording() {
   if (!ready || !renderer) {
     showStatus('Open the camera first.');
     return;
   }
+  if (recordingStarting || isRecording()) return;
   if (!window.MediaRecorder || typeof canvas.captureStream !== 'function') {
     showStatus('Video recording is not supported in this browser.', 4500);
     return;
   }
 
+  recordingStarting = true;
+  shutterButton.disabled = true;
+
   try {
+    const microphoneTrack = await ensureMicrophone();
+    recordingHasAudio = Boolean(microphoneTrack);
     recordingChunks = [];
-    recordingMimeType = selectRecordingMimeType();
+
     const canvasStream = canvas.captureStream(30);
+    recordingStream = new MediaStream(canvasStream.getVideoTracks());
+
+    if (microphoneTrack) {
+      recordingAudioTrack = microphoneTrack.clone();
+      recordingStream.addTrack(recordingAudioTrack);
+    }
+
+    recordingMimeType = selectRecordingMimeType(recordingHasAudio);
     const options = {
       videoBitsPerSecond: 6_000_000
     };
+    if (recordingHasAudio) options.audioBitsPerSecond = 128_000;
     if (recordingMimeType) options.mimeType = recordingMimeType;
 
-    mediaRecorder = new MediaRecorder(canvasStream, options);
+    mediaRecorder = new MediaRecorder(recordingStream, options);
     mediaRecorder.addEventListener('dataavailable', (event) => {
       if (event.data?.size) recordingChunks.push(event.data);
     });
@@ -391,6 +594,8 @@ function startRecording() {
       resetRecordingUi();
     }, { once: true });
 
+    playUiSound('record-start');
+    await new Promise((resolve) => setTimeout(resolve, 190));
     mediaRecorder.start(250);
     recordingStartedAt = Date.now();
     document.body.classList.add('is-recording');
@@ -399,6 +604,7 @@ function startRecording() {
     recordingBadge.hidden = false;
     recordingTime.textContent = '00:00';
     switchButton.disabled = true;
+    showStatus(recordingHasAudio ? 'Recording with microphone audio.' : 'Recording without microphone audio.', 1800);
 
     clearInterval(recordingTimer);
     recordingTimer = setInterval(() => {
@@ -410,12 +616,16 @@ function startRecording() {
     console.error(error);
     showStatus('This browser could not start video recording.', 4500);
     resetRecordingUi();
+  } finally {
+    recordingStarting = false;
+    shutterButton.disabled = false;
   }
 }
 
 function stopRecording() {
   if (!isRecording()) return;
   mediaRecorder.stop();
+  playUiSound('record-stop');
 }
 
 function finishRecording() {
@@ -424,6 +634,7 @@ function finishRecording() {
   const blob = new Blob(recordingChunks, { type: mimeType });
   const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
   const filename = `distortion-field-${timestamp()}.${extension}`;
+  const hasAudio = recordingHasAudio;
 
   resetRecordingUi();
 
@@ -432,8 +643,8 @@ function finishRecording() {
     return;
   }
 
-  setLastCapture({ blob, filename, type: 'video', duration });
-  showStatus('Video recorded.');
+  setLastCapture({ blob, filename, type: 'video', duration, hasAudio });
+  showStatus(hasAudio ? 'Video recorded with sound.' : 'Video recorded without sound.');
   openPreview();
 }
 
@@ -445,6 +656,11 @@ function resetRecordingUi() {
   shutterButton.setAttribute('aria-label', 'Start video recording');
   recordingBadge.hidden = true;
   switchButton.disabled = false;
+  recordingAudioTrack?.stop();
+  recordingAudioTrack = null;
+  recordingStream?.getVideoTracks().forEach((track) => track.stop());
+  recordingStream = null;
+  recordingHasAudio = false;
 }
 
 function formatDuration(milliseconds) {
@@ -488,11 +704,12 @@ function openPreview() {
     playback.controls = true;
     playback.playsInline = true;
     playback.loop = true;
-    playback.autoplay = true;
-    playback.muted = true;
+    playback.autoplay = false;
+    playback.muted = false;
     previewFrame.appendChild(playback);
     previewTitle.textContent = 'VIDEO CAPTURED';
-    previewMeta.textContent = `${formatDuration(lastCapture.duration)} / ${formatFileSize(lastCapture.blob.size)}`;
+    const audioLabel = lastCapture.hasAudio ? 'WITH AUDIO' : 'NO AUDIO';
+    previewMeta.textContent = `${formatDuration(lastCapture.duration)} / ${audioLabel} / ${formatFileSize(lastCapture.blob.size)}`;
   }
 
   preview.hidden = false;
@@ -610,6 +827,7 @@ window.addEventListener('pointerdown', setCenterFromPointer);
 window.addEventListener('pagehide', () => {
   if (isRecording()) stopRecording();
   stream?.getTracks().forEach((track) => track.stop());
+  microphoneStream?.getTracks().forEach((track) => track.stop());
   if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
   closePreviewMedia();
 });
@@ -636,5 +854,6 @@ saveSharePreviewButton.addEventListener('click', saveOrShareLastCapture);
   beforeButton.addEventListener(type, () => setBefore(false), { passive: true });
 });
 
+initVortex();
 setOutputs();
 setCaptureMode('photo');
