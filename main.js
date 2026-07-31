@@ -5,6 +5,9 @@ const canvas = document.querySelector('#stage');
 const permission = document.querySelector('#permission');
 const startButton = document.querySelector('#startCamera');
 const switchButton = document.querySelector('#switchCamera');
+const controls = document.querySelector('#controls');
+const toggleControlsButton = document.querySelector('#toggleControls');
+const currentModeLabel = document.querySelector('#currentModeLabel');
 const statusEl = document.querySelector('#status');
 const modeButtons = [...document.querySelectorAll('.mode')];
 const strengthInput = document.querySelector('#strength');
@@ -19,20 +22,18 @@ const beforeButton = document.querySelector('#before');
 const photoModeButton = document.querySelector('#photoMode');
 const videoModeButton = document.querySelector('#videoMode');
 const shutterButton = document.querySelector('#shutter');
-const captureHint = document.querySelector('#captureHint');
 const recordingBadge = document.querySelector('#recordingBadge');
 const recordingTime = document.querySelector('#recordingTime');
 const flash = document.querySelector('#flash');
 const openLastButton = document.querySelector('#openLast');
-const saveLastButton = document.querySelector('#saveLast');
 const lastThumb = document.querySelector('#lastThumb');
 const preview = document.querySelector('#preview');
 const previewFrame = document.querySelector('#previewFrame');
 const previewTitle = document.querySelector('#previewTitle');
 const previewMeta = document.querySelector('#previewMeta');
 const closePreviewButton = document.querySelector('#closePreview');
+const savePreviewButton = document.querySelector('#savePreview');
 const sharePreviewButton = document.querySelector('#sharePreview');
-const downloadPreviewButton = document.querySelector('#downloadPreview');
 
 let stream = null;
 let facingMode = 'environment';
@@ -249,6 +250,8 @@ function setMode(mode) {
     button.classList.toggle('active', Number(button.dataset.mode) === mode);
   });
   if (material) material.uniforms.uMode.value = mode;
+  const activeButton = modeButtons.find((button) => Number(button.dataset.mode) === mode);
+  if (currentModeLabel && activeButton) currentModeLabel.textContent = activeButton.textContent;
 }
 
 function reset() {
@@ -284,8 +287,9 @@ function setCenterFromPointer(event) {
     !ready ||
     !material ||
     event.target.closest('.controls') ||
-    event.target.closest('.topbar') ||
-    event.target.closest('.preview')
+    event.target.closest('.capture-dock') ||
+    event.target.closest('.preview') ||
+    event.target.closest('.permission-panel')
   ) return;
 
   const rect = canvas.getBoundingClientRect();
@@ -310,9 +314,6 @@ function setCaptureMode(mode) {
   shutterButton.classList.toggle('photo', isPhoto);
   shutterButton.classList.toggle('video', !isPhoto);
   shutterButton.setAttribute('aria-label', isPhoto ? 'Take photo' : 'Start video recording');
-  captureHint.textContent = isPhoto
-    ? 'Tap to photograph the distorted view.'
-    : 'Tap to record up to 30 seconds.';
 }
 
 function flashCamera() {
@@ -341,7 +342,7 @@ async function takePhoto() {
 
   const filename = `distortion-field-${timestamp()}.jpg`;
   setLastCapture({ blob, filename, type: 'photo', duration: 0 });
-  showStatus('Photo captured. Tap SAVE to add it to your phone.');
+  showStatus('Photo captured.');
   openPreview();
 }
 
@@ -433,7 +434,7 @@ function finishRecording() {
   }
 
   setLastCapture({ blob, filename, type: 'video', duration });
-  showStatus('Video recorded. Tap SAVE to add it to your phone.');
+  showStatus('Video recorded.');
   openPreview();
 }
 
@@ -459,7 +460,6 @@ function setLastCapture(capture) {
   lastCapture = capture;
   lastObjectUrl = URL.createObjectURL(capture.blob);
   openLastButton.disabled = false;
-  saveLastButton.disabled = false;
 
   if (capture.type === 'photo') {
     lastThumb.textContent = '';
@@ -516,7 +516,36 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function saveOrShareLastCapture() {
+async function saveLastCapture() {
+  if (!lastCapture) return;
+
+  if (typeof window.showSaveFilePicker === 'function') {
+    try {
+      const mimeType = (lastCapture.blob.type || (lastCapture.type === 'photo' ? 'image/jpeg' : 'video/webm')).split(';')[0];
+      const extension = lastCapture.filename.split('.').pop();
+      const handle = await window.showSaveFilePicker({
+        suggestedName: lastCapture.filename,
+        types: [{
+          description: lastCapture.type === 'photo' ? 'Image' : 'Video',
+          accept: { [mimeType]: [`.${extension}`] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(lastCapture.blob);
+      await writable.close();
+      showStatus('Saved.');
+      return;
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      console.warn('Native save picker failed, falling back to download.', error);
+    }
+  }
+
+  downloadLastCapture();
+  showStatus('Saved to your browser downloads.', 3200);
+}
+
+async function shareLastCapture() {
   if (!lastCapture) return;
   const file = new File([lastCapture.blob], lastCapture.filename, {
     type: lastCapture.blob.type || (lastCapture.type === 'photo' ? 'image/jpeg' : 'video/webm'),
@@ -531,16 +560,14 @@ async function saveOrShareLastCapture() {
         title: 'Distortion Field',
         text: 'Created with Distortion Field by Yssem Lab.'
       });
-      showStatus('Choose Save Image or Save Video in the share sheet.');
       return;
     } catch (error) {
       if (error?.name === 'AbortError') return;
-      console.warn('Native file sharing failed, falling back to download.', error);
+      console.warn('Native sharing failed.', error);
     }
   }
 
-  downloadLastCapture();
-  showStatus('File downloaded. Open it to save or move it to Photos.');
+  showStatus('File sharing is not supported in this browser.', 3800);
 }
 
 function downloadLastCapture() {
@@ -567,6 +594,10 @@ function handleShutter() {
 }
 
 startButton.addEventListener('click', startCamera);
+toggleControlsButton.addEventListener('click', () => {
+  const collapsed = controls.classList.toggle('collapsed');
+  toggleControlsButton.setAttribute('aria-expanded', String(!collapsed));
+});
 switchButton.addEventListener('click', async () => {
   facingMode = facingMode === 'environment' ? 'user' : 'environment';
   await startCamera();
@@ -594,10 +625,9 @@ photoModeButton.addEventListener('click', () => setCaptureMode('photo'));
 videoModeButton.addEventListener('click', () => setCaptureMode('video'));
 shutterButton.addEventListener('click', handleShutter);
 openLastButton.addEventListener('click', openPreview);
-saveLastButton.addEventListener('click', saveOrShareLastCapture);
 closePreviewButton.addEventListener('click', closePreview);
-sharePreviewButton.addEventListener('click', saveOrShareLastCapture);
-downloadPreviewButton.addEventListener('click', downloadLastCapture);
+savePreviewButton.addEventListener('click', saveLastCapture);
+sharePreviewButton.addEventListener('click', shareLastCapture);
 
 ['pointerdown', 'touchstart'].forEach((type) => {
   beforeButton.addEventListener(type, () => setBefore(true), { passive: true });

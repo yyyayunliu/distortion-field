@@ -14,75 +14,83 @@
     <video id="camera" playsinline muted></video>
     <canvas id="stage"></canvas>
 
-    <section id="permission" class="permission-panel">
+    <section id="permission" class="permission-panel" aria-label="Launch Distortion Field">
+      <div class="vortex" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
       <div class="permission-copy">
-        <p class="eyebrow">YSSEM LAB / REALITY DISTORTION FIELD</p>
         <h1>DISTORTION<br />FIELD</h1>
-        <p>Reshape the space around you.</p>
-        <button id="startCamera" type="button">OPEN CAMERA</button>
-        <p class="fine-print">Camera access requires HTTPS or localhost.</p>
+        <p>BY YSSEM LAB</p>
+        <button id="startCamera" type="button">ENTER</button>
       </div>
     </section>
 
-    <header class="topbar">
-      <div class="brand-lockup">
-        <strong>DISTORTION FIELD</strong>
-        <span>REALITY FILTER / PROTOTYPE 02</span>
-      </div>
-      <div class="top-actions">
-        <div id="recordingBadge" class="recording-badge" hidden>
-          <i></i><span id="recordingTime">00:00</span>
+    <section id="controls" class="controls" aria-label="Distortion controls">
+      <button id="toggleControls" class="controls-toggle" type="button" aria-expanded="true" aria-controls="controlsBody">
+        <span>CONTROLS</span>
+        <span class="controls-summary"><b id="currentModeLabel">BEND</b><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 7.5 5 5 5-5" /></svg></span>
+      </button>
+
+      <div id="controlsBody" class="controls-body">
+        <div class="mode-row" role="group" aria-label="Distortion mode">
+          <button type="button" class="mode active" data-mode="0">BEND</button>
+          <button type="button" class="mode" data-mode="1">BULGE</button>
+          <button type="button" class="mode" data-mode="2">TWIST</button>
+          <button type="button" class="mode" data-mode="3">WAVE</button>
         </div>
-        <button id="switchCamera" class="icon-button" type="button" aria-label="Switch camera">↻</button>
-      </div>
-    </header>
 
-    <section class="controls" aria-label="Distortion controls">
-      <div class="mode-row" role="group" aria-label="Distortion mode">
-        <button type="button" class="mode active" data-mode="0">BEND</button>
-        <button type="button" class="mode" data-mode="1">BULGE</button>
-        <button type="button" class="mode" data-mode="2">TWIST</button>
-        <button type="button" class="mode" data-mode="3">WAVE</button>
-      </div>
-
-      <div class="slider-grid">
-        <label>
-          <span>STRENGTH <output id="strengthValue">0.24</output></span>
-          <input id="strength" type="range" min="0" max="1" step="0.01" value="0.24" />
-        </label>
-        <label>
-          <span>RADIUS <output id="radiusValue">0.42</output></span>
-          <input id="radius" type="range" min="0.08" max="1" step="0.01" value="0.42" />
-        </label>
-        <label>
-          <span>FREQUENCY <output id="frequencyValue">4.0</output></span>
-          <input id="frequency" type="range" min="0.5" max="12" step="0.1" value="4" />
-        </label>
-      </div>
-
-      <div class="utility-row">
-        <button id="randomize" type="button">RANDOM</button>
-        <button id="before" type="button">HOLD BEFORE</button>
-        <button id="reset" type="button">RESET</button>
-      </div>
-
-      <div class="capture-dock">
-        <div class="capture-mode" role="group" aria-label="Capture mode">
-          <button id="photoMode" type="button" class="active">PHOTO</button>
-          <button id="videoMode" type="button">VIDEO</button>
+        <div class="slider-grid">
+          <label>
+            <span>STRENGTH <output id="strengthValue">0.24</output></span>
+            <input id="strength" type="range" min="0" max="1" step="0.01" value="0.24" />
+          </label>
+          <label>
+            <span>RADIUS <output id="radiusValue">0.42</output></span>
+            <input id="radius" type="range" min="0.08" max="1" step="0.01" value="0.42" />
+          </label>
+          <label>
+            <span>FREQUENCY <output id="frequencyValue">4.0</output></span>
+            <input id="frequency" type="range" min="0.5" max="12" step="0.1" value="4" />
+          </label>
         </div>
-        <div class="capture-row">
-          <button id="openLast" class="round-action" type="button" aria-label="Open last capture" disabled>
-            <span id="lastThumb">LAST</span>
-          </button>
-          <button id="shutter" class="shutter photo" type="button" aria-label="Take photo">
-            <span></span>
-          </button>
-          <button id="saveLast" class="round-action" type="button" aria-label="Save or share last capture" disabled>
-            SAVE
-          </button>
+
+        <div class="utility-row">
+          <button id="randomize" type="button">RANDOM</button>
+          <button id="before" type="button">HOLD BEFORE</button>
+          <button id="reset" type="button">RESET</button>
         </div>
-        <p class="capture-hint" id="captureHint">Tap to photograph the distorted view.</p>
+      </div>
+    </section>
+
+    <section class="capture-dock" aria-label="Camera controls">
+      <div id="recordingBadge" class="recording-badge" hidden>
+        <i></i><span id="recordingTime">00:00</span>
+      </div>
+
+      <div class="capture-mode" role="group" aria-label="Capture mode">
+        <button id="photoMode" type="button" class="active">PHOTO</button>
+        <button id="videoMode" type="button">VIDEO</button>
+      </div>
+
+      <div class="capture-row">
+        <button id="openLast" class="round-action" type="button" aria-label="Open last capture" disabled>
+          <span id="lastThumb">LAST</span>
+        </button>
+
+        <button id="shutter" class="shutter photo" type="button" aria-label="Take photo">
+          <span></span>
+        </button>
+
+        <button id="switchCamera" class="round-action switch-camera" type="button" aria-label="Switch camera">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M7.2 12.1A10.2 10.2 0 0 1 23.6 8.8l2.1 2.1" />
+            <path d="M25.7 5.9v5.4h-5.4" />
+            <path d="M24.8 19.9A10.2 10.2 0 0 1 8.4 23.2l-2.1-2.1" />
+            <path d="M6.3 26.1v-5.4h5.4" />
+          </svg>
+        </button>
       </div>
     </section>
 
@@ -96,10 +104,9 @@
       </div>
       <div id="previewFrame" class="preview-frame"></div>
       <div class="preview-actions">
-        <button id="sharePreview" class="primary" type="button">SAVE / SHARE</button>
-        <button id="downloadPreview" type="button">DOWNLOAD FILE</button>
+        <button id="savePreview" class="primary" type="button">SAVE</button>
+        <button id="sharePreview" type="button">SHARE</button>
       </div>
-      <p class="preview-note">On iPhone, choose “Save Image” or “Save Video” in the share sheet when available.</p>
     </section>
 
     <div id="flash" class="flash" aria-hidden="true"></div>
