@@ -17,6 +17,11 @@ const frequencyInput = document.querySelector('#frequency');
 const strengthValue = document.querySelector('#strengthValue');
 const radiusValue = document.querySelector('#radiusValue');
 const frequencyValue = document.querySelector('#frequencyValue');
+const strengthControl = document.querySelector('#strengthControl');
+const soundControlButton = document.querySelector('#soundControl');
+const soundControlState = document.querySelector('#soundControlState');
+const soundDbValue = document.querySelector('#soundDbValue');
+const soundMeterFill = document.querySelector('#soundMeterFill');
 const randomButton = document.querySelector('#randomize');
 const resetButton = document.querySelector('#reset');
 const beforeButton = document.querySelector('#before');
@@ -62,6 +67,11 @@ let audioContext = null;
 let vortexRenderer = null;
 let vortexMaterial = null;
 let vortexRunning = true;
+let soundControlEnabled = false;
+let soundAnalyser = null;
+let soundSourceNode = null;
+let soundLevelData = null;
+let smoothedSoundStrength = 0;
 
 const defaults = {
   mode: 0,
@@ -72,6 +82,10 @@ const defaults = {
 };
 
 const MAX_RECORDING_MS = 30_000;
+const MIC_MIN_DB = 30;
+const MIC_MAX_DB = 80;
+const MIC_DB_OFFSET = 90;
+const SOUND_SMOOTHING = 0.76;
 
 
 function initVortex() {
@@ -219,25 +233,127 @@ function playUiSound(type) {
   }
 }
 
-async function ensureMicrophone() {
+async function ensureMicrophone(purpose = 'recording') {
   const activeTrack = microphoneStream?.getAudioTracks().find((track) => track.readyState === 'live');
   if (activeTrack) return activeTrack;
 
   try {
     microphoneStream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
       },
       video: false
     });
     return microphoneStream.getAudioTracks()[0] || null;
   } catch (error) {
     console.warn('Microphone access was unavailable.', error);
-    showStatus('Microphone unavailable. Recording video without sound.', 4200);
+    showStatus(
+      purpose === 'sound-control'
+        ? 'Microphone unavailable. Sound control stays off.'
+        : 'Microphone unavailable. Recording video without sound.',
+      4200
+    );
     return null;
   }
+}
+
+function disconnectSoundAnalyser() {
+  try {
+    soundSourceNode?.disconnect();
+  } catch (error) {
+    console.debug('Sound analyser was already disconnected.', error);
+  }
+  soundSourceNode = null;
+  soundAnalyser = null;
+  soundLevelData = null;
+}
+
+function setSoundControlUi(enabled) {
+  soundControlEnabled = enabled;
+  soundControlButton.classList.toggle('active', enabled);
+  soundControlButton.setAttribute('aria-pressed', String(enabled));
+  soundControlState.textContent = enabled ? 'ON' : 'OFF';
+  controls.classList.toggle('sound-control-active', enabled);
+  strengthInput.disabled = enabled;
+
+  if (!enabled) {
+    soundDbValue.value = '--';
+    soundMeterFill.style.transform = 'scaleX(0)';
+  }
+}
+
+async function enableSoundControl() {
+  if (!ready) {
+    showStatus('Open the camera first.');
+    return false;
+  }
+
+  soundControlButton.disabled = true;
+  try {
+    const microphoneTrack = await ensureMicrophone('sound-control');
+    const context = getAudioContext();
+    if (!microphoneTrack || !context || !microphoneStream) return false;
+
+    disconnectSoundAnalyser();
+    soundAnalyser = context.createAnalyser();
+    soundAnalyser.fftSize = 1024;
+    soundAnalyser.smoothingTimeConstant = 0.55;
+    soundSourceNode = context.createMediaStreamSource(microphoneStream);
+    soundSourceNode.connect(soundAnalyser);
+    soundLevelData = new Float32Array(soundAnalyser.fftSize);
+    smoothedSoundStrength = Number(strengthInput.value);
+    setSoundControlUi(true);
+    showStatus('Sound control on: 30–80 dB controls strength 0–1.', 3200);
+    return true;
+  } catch (error) {
+    console.error('Sound control could not start.', error);
+    showStatus('Sound control could not access the microphone.', 4200);
+    return false;
+  } finally {
+    soundControlButton.disabled = false;
+  }
+}
+
+function disableSoundControl() {
+  setSoundControlUi(false);
+  disconnectSoundAnalyser();
+
+  if (!isRecording()) {
+    microphoneStream?.getTracks().forEach((track) => track.stop());
+    microphoneStream = null;
+  }
+
+  showStatus('Sound control off. Strength is manual.');
+}
+
+async function toggleSoundControl() {
+  if (soundControlEnabled) disableSoundControl();
+  else await enableSoundControl();
+}
+
+function updateSoundControl() {
+  if (!soundControlEnabled || !soundAnalyser || !soundLevelData || !material) return;
+
+  soundAnalyser.getFloatTimeDomainData(soundLevelData);
+  let sumSquares = 0;
+  for (let index = 0; index < soundLevelData.length; index += 1) {
+    sumSquares += soundLevelData[index] * soundLevelData[index];
+  }
+
+  const rms = Math.sqrt(sumSquares / soundLevelData.length);
+  const dbFs = 20 * Math.log10(Math.max(rms, 0.0000001));
+  const estimatedDb = THREE.MathUtils.clamp(dbFs + MIC_DB_OFFSET, MIC_MIN_DB, MIC_MAX_DB);
+  const targetStrength = (estimatedDb - MIC_MIN_DB) / (MIC_MAX_DB - MIC_MIN_DB);
+  smoothedSoundStrength = smoothedSoundStrength * SOUND_SMOOTHING + targetStrength * (1 - SOUND_SMOOTHING);
+  const strength = THREE.MathUtils.clamp(smoothedSoundStrength, 0, 1);
+
+  strengthInput.value = strength.toFixed(2);
+  strengthValue.value = strength.toFixed(2);
+  material.uniforms.uStrength.value = strength;
+  soundDbValue.value = String(Math.round(estimatedDb));
+  soundMeterFill.style.transform = `scaleX(${targetStrength.toFixed(3)})`;
 }
 
 function showStatus(message, duration = 2200) {
@@ -414,6 +530,7 @@ function animate(time = 0) {
   requestAnimationFrame(animate);
   if (!renderer || !material) return;
   material.uniforms.uTime.value = time * 0.001;
+  updateSoundControl();
   renderer.render(scene, renderCamera);
 }
 
@@ -433,7 +550,7 @@ function setMode(mode) {
 }
 
 function reset() {
-  strengthInput.value = defaults.strength;
+  if (!soundControlEnabled) strengthInput.value = defaults.strength;
   radiusInput.value = defaults.radius;
   frequencyInput.value = defaults.frequency;
   setMode(defaults.mode);
@@ -443,7 +560,7 @@ function reset() {
 
 function randomize() {
   const mode = Math.floor(Math.random() * 4);
-  strengthInput.value = (0.15 + Math.random() * 0.65).toFixed(2);
+  if (!soundControlEnabled) strengthInput.value = (0.15 + Math.random() * 0.65).toFixed(2);
   radiusInput.value = (0.22 + Math.random() * 0.65).toFixed(2);
   frequencyInput.value = (1.5 + Math.random() * 8.5).toFixed(1);
   setMode(mode);
@@ -661,6 +778,12 @@ function resetRecordingUi() {
   recordingStream?.getVideoTracks().forEach((track) => track.stop());
   recordingStream = null;
   recordingHasAudio = false;
+
+  if (!soundControlEnabled) {
+    microphoneStream?.getTracks().forEach((track) => track.stop());
+    microphoneStream = null;
+    disconnectSoundAnalyser();
+  }
 }
 
 function formatDuration(milliseconds) {
@@ -828,6 +951,7 @@ window.addEventListener('pagehide', () => {
   if (isRecording()) stopRecording();
   stream?.getTracks().forEach((track) => track.stop());
   microphoneStream?.getTracks().forEach((track) => track.stop());
+  disconnectSoundAnalyser();
   if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
   closePreviewMedia();
 });
@@ -840,6 +964,7 @@ modeButtons.forEach((button) => {
 });
 randomButton.addEventListener('click', randomize);
 resetButton.addEventListener('click', reset);
+soundControlButton.addEventListener('click', toggleSoundControl);
 photoModeButton.addEventListener('click', () => setCaptureMode('photo'));
 videoModeButton.addEventListener('click', () => setCaptureMode('video'));
 shutterButton.addEventListener('click', handleShutter);
@@ -856,4 +981,5 @@ saveSharePreviewButton.addEventListener('click', saveOrShareLastCapture);
 
 initVortex();
 setOutputs();
+setSoundControlUi(false);
 setCaptureMode('photo');

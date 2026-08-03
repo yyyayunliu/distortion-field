@@ -1,22 +1,22 @@
-# DISTORTION FIELD — Prototype 02.3
+# DISTORTION FIELD — Prototype 02.4
 
 A responsive reality-filter camera by Yssem Lab. It transforms a live camera feed with Bend, Bulge, Twist and Wave shaders, then captures the distorted result as a photo or video.
 
 The original **UNBUILDABLE — Prototype 01** remains a separate project. This folder is the updated **DISTORTION FIELD** version.
 
-## Version 2.3 updates
+## Version 2.4 updates
 
-- Synthesized camera feedback sounds:
-  - shutter cue for photos
-  - start cue for video recording
-  - stop cue for video recording
-- The cues are original Web Audio synthesis inspired by familiar phone-camera behavior; they do not copy Apple audio samples.
-- Video recording now requests microphone access and combines the microphone track with the distorted WebGL canvas.
-- If microphone permission is denied or unavailable, recording continues without audio.
-- The video preview reports `WITH AUDIO` or `NO AUDIO` and plays with sound when the user presses play.
-- Desktop layouts place the expanded distortion controls in a narrow panel on the far left.
-- Mobile layouts retain the collapsible bottom control panel.
-- The launch screen now uses a real animated WebGL spiral vortex based on polar twist distortion, on both desktop and mobile.
+- Added a **SOUND CONTROL** toggle in the distortion panel.
+- When enabled, microphone level drives `STRENGTH` in real time.
+- The displayed range maps linearly as requested:
+  - estimated `30 dB` → strength `0`
+  - estimated `80 dB` → strength `1`
+- The strength slider becomes read-only while sound control is active and visibly follows the microphone.
+- The microphone level meter remains live while taking photos or recording video.
+- The existing video recorder reuses the same microphone stream, so sound-controlled visual changes and microphone audio can be recorded together.
+- Turning sound control off returns strength to manual slider control.
+
+**Important:** Web browsers expose digital microphone amplitude (dBFS), not calibrated real-world sound pressure level. The prototype applies a practical offset to show an estimated 30–80 dB range. Accurate SPL measurement would require per-device calibration or a native app.
 
 ## Existing features
 
@@ -35,9 +35,9 @@ The original **UNBUILDABLE — Prototype 01** remains a separate project. This f
 
 ## Camera and microphone permissions
 
-Camera access is requested when the user presses **ENTER**. Microphone access is requested only when the user starts the first video recording.
+Camera access is requested when the user presses **ENTER**. Microphone access is requested when the user first enables **SOUND CONTROL** or starts video recording.
 
-The microphone uses browser-provided echo cancellation, noise suppression and automatic gain control when available. Support and output formats still vary by browser, so iPhone Safari and Android Chrome should be tested separately.
+For more responsive level control, the prototype requests the microphone without echo cancellation, noise suppression or automatic gain control when the browser allows it. Browsers may ignore these preferences. Support and output formats still vary, so iPhone Safari and Android Chrome should be tested separately.
 
 ## Save and share behavior
 

@@ -38,7 +38,7 @@
         </div>
 
         <div class="slider-grid">
-          <label>
+          <label id="strengthControl">
             <span>STRENGTH <output id="strengthValue">0.24</output></span>
             <input id="strength" type="range" min="0" max="1" step="0.01" value="0.24" />
           </label>
@@ -50,6 +50,17 @@
             <span>FREQUENCY <output id="frequencyValue">4.0</output></span>
             <input id="frequency" type="range" min="0.5" max="12" step="0.1" value="4" />
           </label>
+        </div>
+
+        <div class="sound-control-row">
+          <button id="soundControl" class="sound-control-button" type="button" aria-pressed="false">
+            <span>SOUND CONTROL</span>
+            <b id="soundControlState">OFF</b>
+          </button>
+          <div class="sound-meter" aria-label="Estimated microphone level">
+            <span><output id="soundDbValue">--</output> dB</span>
+            <i aria-hidden="true"><b id="soundMeterFill"></b></i>
+          </div>
         </div>
 
         <div class="utility-row">
