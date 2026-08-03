@@ -407,3 +407,79 @@ body.is-recording .capture-mode { opacity: .35; pointer-events: none; }
 .controls, .capture-dock, .preview { touch-action: manipulation; }
 input[type="range"] { touch-action: pan-x; }
 .recording-badge[hidden] { display: none; }
+
+/* V2.4 mobile controls refinement — keep this after all other media queries. */
+@media (max-width: 899px) {
+  .controls,
+  .controls.collapsed,
+  .controls-toggle,
+  .controls-body {
+    background: transparent !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+
+  .controls,
+  .controls.collapsed {
+    border-color: transparent !important;
+  }
+
+  .slider-grid {
+    width: 100%;
+    justify-items: stretch;
+  }
+
+  .slider-grid label {
+    grid-template-columns: 136px minmax(0, 1fr) !important;
+    column-gap: 8px !important;
+    width: 100%;
+    justify-items: start;
+  }
+
+  .slider-grid span {
+    display: grid !important;
+    grid-template-columns: 84px 48px;
+    column-gap: 4px;
+    width: 136px;
+    min-width: 136px;
+    justify-content: start;
+    justify-items: start;
+    align-items: baseline;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .slider-grid output {
+    display: block;
+    min-width: 48px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .slider-grid input[type="range"] {
+    width: 68% !important;
+    min-width: 76px;
+    max-width: 132px;
+    justify-self: end !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .slider-grid label {
+    grid-template-columns: 132px minmax(0, 1fr) !important;
+    column-gap: 6px !important;
+  }
+
+  .slider-grid span {
+    grid-template-columns: 82px 46px;
+    width: 132px;
+    min-width: 132px;
+  }
+
+  .slider-grid input[type="range"] {
+    width: 64% !important;
+    min-width: 68px;
+    max-width: 112px;
+  }
+}
