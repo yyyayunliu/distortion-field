@@ -20,10 +20,7 @@ const frequencyValue = document.querySelector('#frequencyValue');
 const strengthControl = document.querySelector('#strengthControl');
 const soundControlButton = document.querySelector('#soundControl');
 const soundControlState = document.querySelector('#soundControlState');
-const soundDbValue = document.querySelector('#soundDbValue');
-const soundMeterFill = document.querySelector('#soundMeterFill');
 const randomButton = document.querySelector('#randomize');
-const resetButton = document.querySelector('#reset');
 const beforeButton = document.querySelector('#before');
 const photoModeButton = document.querySelector('#photoMode');
 const videoModeButton = document.querySelector('#videoMode');
@@ -67,7 +64,7 @@ let audioContext = null;
 let vortexRenderer = null;
 let vortexMaterial = null;
 let vortexRunning = true;
-let soundControlEnabled = false;
+let soundControlEnabled = true;
 let soundAnalyser = null;
 let soundSourceNode = null;
 let soundLevelData = null;
@@ -82,8 +79,8 @@ const defaults = {
 };
 
 const MAX_RECORDING_MS = 30_000;
-const MIC_MIN_DB = 30;
-const MIC_MAX_DB = 55;
+const MIC_MIN_DB = 15;
+const MIC_MAX_DB = 50;
 const MIC_DB_OFFSET = 90;
 const SOUND_SMOOTHING = 0.76;
 
@@ -279,8 +276,9 @@ function setSoundControlUi(enabled) {
   strengthInput.disabled = enabled;
 
   if (!enabled) {
-    soundDbValue.value = '--';
-    soundMeterFill.style.transform = 'scaleX(0)';
+    strengthValue.value = Number(strengthInput.value).toFixed(2);
+  } else if (!soundAnalyser) {
+    strengthValue.value = '-- dB';
   }
 }
 
@@ -294,7 +292,10 @@ async function enableSoundControl() {
   try {
     const microphoneTrack = await ensureMicrophone('sound-control');
     const context = getAudioContext();
-    if (!microphoneTrack || !context || !microphoneStream) return false;
+    if (!microphoneTrack || !context || !microphoneStream) {
+      setSoundControlUi(false);
+      return false;
+    }
 
     disconnectSoundAnalyser();
     soundAnalyser = context.createAnalyser();
@@ -305,10 +306,11 @@ async function enableSoundControl() {
     soundLevelData = new Float32Array(soundAnalyser.fftSize);
     smoothedSoundStrength = Number(strengthInput.value);
     setSoundControlUi(true);
-    showStatus('Sound control on: 30–55 dB controls strength 0–1.', 3200);
+    showStatus('Sound control on: 15–50 dB controls strength 0–1.', 3200);
     return true;
   } catch (error) {
     console.error('Sound control could not start.', error);
+    setSoundControlUi(false);
     showStatus('Sound control could not access the microphone.', 4200);
     return false;
   } finally {
@@ -350,10 +352,8 @@ function updateSoundControl() {
   const strength = THREE.MathUtils.clamp(smoothedSoundStrength, 0, 1);
 
   strengthInput.value = strength.toFixed(2);
-  strengthValue.value = strength.toFixed(2);
+  strengthValue.value = `${Math.round(estimatedDb)} dB`;
   material.uniforms.uStrength.value = strength;
-  soundDbValue.value = String(Math.round(estimatedDb));
-  soundMeterFill.style.transform = `scaleX(${targetStrength.toFixed(3)})`;
 }
 
 function showStatus(message, duration = 2200) {
@@ -364,7 +364,9 @@ function showStatus(message, duration = 2200) {
 }
 
 function setOutputs() {
-  strengthValue.value = Number(strengthInput.value).toFixed(2);
+  if (!soundControlEnabled) {
+    strengthValue.value = Number(strengthInput.value).toFixed(2);
+  }
   radiusValue.value = Number(radiusInput.value).toFixed(2);
   frequencyValue.value = Number(frequencyInput.value).toFixed(1);
 }
@@ -404,6 +406,9 @@ async function startCamera() {
     if (!renderer) initThree();
     updateVideoSize();
     ready = true;
+    if (soundControlEnabled && !soundAnalyser) {
+      await enableSoundControl();
+    }
     showStatus('Tap the image to move the distortion center.');
   } catch (error) {
     console.error(error);
@@ -963,7 +968,6 @@ modeButtons.forEach((button) => {
   input.addEventListener('input', updateUniforms);
 });
 randomButton.addEventListener('click', randomize);
-resetButton.addEventListener('click', reset);
 soundControlButton.addEventListener('click', toggleSoundControl);
 photoModeButton.addEventListener('click', () => setCaptureMode('photo'));
 videoModeButton.addEventListener('click', () => setCaptureMode('video'));
@@ -981,5 +985,5 @@ saveSharePreviewButton.addEventListener('click', saveOrShareLastCapture);
 
 initVortex();
 setOutputs();
-setSoundControlUi(false);
+setSoundControlUi(true);
 setCaptureMode('photo');

@@ -52,21 +52,13 @@
           </label>
         </div>
 
-        <div class="sound-control-row">
-          <button id="soundControl" class="sound-control-button" type="button" aria-pressed="false">
-            <span>SOUND CONTROL</span>
-            <b id="soundControlState">OFF</b>
-          </button>
-          <div class="sound-meter" aria-label="Estimated microphone level">
-            <span><output id="soundDbValue">--</output> dB</span>
-            <i aria-hidden="true"><b id="soundMeterFill"></b></i>
-          </div>
-        </div>
-
         <div class="utility-row">
           <button id="randomize" type="button">RANDOM</button>
           <button id="before" type="button">HOLD BEFORE</button>
-          <button id="reset" type="button">RESET</button>
+          <button id="soundControl" class="sound-control-button active" type="button" aria-pressed="true">
+            <span>SOUND CONTROL</span>
+            <b id="soundControlState">ON</b>
+          </button>
         </div>
       </div>
     </section>

@@ -6,17 +6,18 @@ The original **UNBUILDABLE — Prototype 01** remains a separate project. This f
 
 ## Version 2.4 updates
 
-- Added a **SOUND CONTROL** toggle in the distortion panel.
+- Replaced **RESET** with a **SOUND CONTROL** toggle in the utility row.
 - When enabled, microphone level drives `STRENGTH` in real time.
 - The displayed range maps linearly as requested:
-  - estimated `30 dB` → strength `0`
-  - estimated `55 dB` → strength `1`
+  - estimated `15 dB` → strength `0`
+  - estimated `50 dB` → strength `1`
 - The strength slider becomes read-only while sound control is active and visibly follows the microphone.
-- The microphone level meter remains live while taking photos or recording video.
+- Sound control is enabled by default after entering the camera.
+- The separate dB meter has been removed; while sound control is on, the `STRENGTH` value displays the live estimated dB reading.
 - The existing video recorder reuses the same microphone stream, so sound-controlled visual changes and microphone audio can be recorded together.
 - Turning sound control off returns strength to manual slider control.
 
-**Important:** Web browsers expose digital microphone amplitude (dBFS), not calibrated real-world sound pressure level. The prototype applies a practical offset to show an estimated 30–55 dB range. Accurate SPL measurement would require per-device calibration or a native app.
+**Important:** Web browsers expose digital microphone amplitude (dBFS), not calibrated real-world sound pressure level. The prototype applies a practical offset to show an estimated 15–50 dB range. Accurate SPL measurement would require per-device calibration or a native app.
 
 ## Existing features
 
@@ -25,7 +26,7 @@ The original **UNBUILDABLE — Prototype 01** remains a separate project. This f
 - Tap the image to move the distortion center
 - Strength, radius and frequency controls
 - Sliders and effect modes remain interactive during recording
-- Random, reset and hold-before controls
+- Random, sound-control and hold-before controls
 - Front/rear camera switching
 - High-quality JPEG photo capture
 - Video recording of the distorted canvas, up to 30 seconds
@@ -35,7 +36,7 @@ The original **UNBUILDABLE — Prototype 01** remains a separate project. This f
 
 ## Camera and microphone permissions
 
-Camera access is requested when the user presses **ENTER**. Microphone access is requested when the user first enables **SOUND CONTROL** or starts video recording.
+Camera access is requested when the user presses **ENTER**. Because **SOUND CONTROL** is on by default, microphone access is requested immediately after the camera opens. If sound control is switched off, video recording can request the microphone again when needed.
 
 For more responsive level control, the prototype requests the microphone without echo cancellation, noise suppression or automatic gain control when the browser allows it. Browsers may ignore these preferences. Support and output formats still vary, so iPhone Safari and Android Chrome should be tested separately.
 
