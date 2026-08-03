@@ -1,31 +1,28 @@
-# DISTORTION FIELD — Prototype 02.4
+# DISTORTION FIELD — Prototype 02.5
 
 A responsive reality-filter camera by Yssem Lab. It transforms a live camera feed with Bend, Bulge, Twist and Wave shaders, then captures the distorted result as a photo or video.
 
 The original **UNBUILDABLE — Prototype 01** remains a separate project. This folder is the updated **DISTORTION FIELD** version.
 
-## Version 2.4 updates
+## Version 2.5 updates
 
-- Replaced **RESET** with a **SOUND CONTROL** toggle in the utility row.
-- When enabled, microphone level drives `STRENGTH` in real time.
-- The displayed range maps linearly as requested:
-  - estimated `15 dB` → strength `0`
-  - estimated `50 dB` → strength `1`
-- The strength slider becomes read-only while sound control is active and visibly follows the microphone.
-- Sound control is enabled by default after entering the camera.
-- The separate dB meter has been removed; while sound control is on, the `STRENGTH` value displays the live estimated dB reading.
-- The existing video recorder reuses the same microphone stream, so sound-controlled visual changes and microphone audio can be recorded together.
-- Turning sound control off returns strength to manual slider control.
-- Refined the control-panel layout: the live dB value stays on one line, all slider labels and values are left-aligned, slider tracks are shorter, and the panel container is fully transparent.
+- **SOUND CONTROL** now drives two visual parameters at the same time:
+  - estimated `15–50 dB` → `STRENGTH 0–1`
+  - detected dominant `50–250 Hz` → `FREQUENCY 0–1`
+- While sound control is active, both the strength and frequency sliders become read-only and visibly follow the microphone.
+- The frequency value displays the detected microphone frequency in `Hz`.
+- When no stable pitch is detected, the display temporarily shows `-- Hz` and holds the most recent visual frequency setting.
+- Turning sound control off restores manual normalized `0–1` control for both sliders.
+- Internally, the normalized frequency value is mapped to the existing shader range, preserving the Bend/Wave visual behavior.
 
-**Important:** Web browsers expose digital microphone amplitude (dBFS), not calibrated real-world sound pressure level. The prototype applies a practical offset to show an estimated 15–50 dB range. Accurate SPL measurement would require per-device calibration or a native app.
+**Important:** The Hz reading is a real-time estimate of the strongest low-frequency tonal component, not a laboratory pitch meter. Speech, music and sustained tones work better than wind, claps or broadband noise. Microphone processing varies across phones.
 
 ## Existing features
 
 - Rear camera by default
 - Bend, Bulge, Twist and Wave distortion modes
 - Tap the image to move the distortion center
-- Strength, radius and frequency controls
+- Strength, radius and normalized frequency controls
 - Sliders and effect modes remain interactive during recording
 - Random, sound-control and hold-before controls
 - Front/rear camera switching

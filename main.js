@@ -68,13 +68,18 @@ let soundControlEnabled = true;
 let soundAnalyser = null;
 let soundSourceNode = null;
 let soundLevelData = null;
+let soundFrequencyData = null;
 let smoothedSoundStrength = 0;
+let smoothedSoundFrequency = 0.30;
+let lastDetectedFrequencyHz = null;
+let lastPitchDetectedAt = 0;
+let lastPitchAnalysisAt = 0;
 
 const defaults = {
   mode: 0,
   strength: 0.24,
   radius: 0.42,
-  frequency: 4.0,
+  frequency: 0.30,
   center: [0.5, 0.5]
 };
 
@@ -83,6 +88,18 @@ const MIC_MIN_DB = 15;
 const MIC_MAX_DB = 50;
 const MIC_DB_OFFSET = 90;
 const SOUND_SMOOTHING = 0.76;
+const MIC_FREQ_MIN_HZ = 50;
+const MIC_FREQ_MAX_HZ = 250;
+const FREQUENCY_SMOOTHING = 0.82;
+const PITCH_ANALYSIS_INTERVAL_MS = 70;
+const PITCH_HOLD_MS = 420;
+const SHADER_FREQUENCY_MIN = 0.5;
+const SHADER_FREQUENCY_MAX = 12.0;
+
+function normalizedFrequencyToShader(value) {
+  const normalized = THREE.MathUtils.clamp(Number(value), 0, 1);
+  return THREE.MathUtils.lerp(SHADER_FREQUENCY_MIN, SHADER_FREQUENCY_MAX, normalized);
+}
 
 
 function initVortex() {
@@ -265,6 +282,7 @@ function disconnectSoundAnalyser() {
   soundSourceNode = null;
   soundAnalyser = null;
   soundLevelData = null;
+  soundFrequencyData = null;
 }
 
 function setSoundControlUi(enabled) {
@@ -274,11 +292,14 @@ function setSoundControlUi(enabled) {
   soundControlState.textContent = enabled ? 'ON' : 'OFF';
   controls.classList.toggle('sound-control-active', enabled);
   strengthInput.disabled = enabled;
+  frequencyInput.disabled = enabled;
 
   if (!enabled) {
     strengthValue.value = Number(strengthInput.value).toFixed(2);
+    frequencyValue.value = Number(frequencyInput.value).toFixed(2);
   } else if (!soundAnalyser) {
     strengthValue.value = '-- dB';
+    frequencyValue.value = '-- Hz';
   }
 }
 
@@ -299,14 +320,21 @@ async function enableSoundControl() {
 
     disconnectSoundAnalyser();
     soundAnalyser = context.createAnalyser();
-    soundAnalyser.fftSize = 1024;
-    soundAnalyser.smoothingTimeConstant = 0.55;
+    soundAnalyser.fftSize = 8192;
+    soundAnalyser.smoothingTimeConstant = 0.62;
+    soundAnalyser.minDecibels = -100;
+    soundAnalyser.maxDecibels = -10;
     soundSourceNode = context.createMediaStreamSource(microphoneStream);
     soundSourceNode.connect(soundAnalyser);
     soundLevelData = new Float32Array(soundAnalyser.fftSize);
+    soundFrequencyData = new Float32Array(soundAnalyser.frequencyBinCount);
     smoothedSoundStrength = Number(strengthInput.value);
+    smoothedSoundFrequency = Number(frequencyInput.value);
+    lastDetectedFrequencyHz = null;
+    lastPitchDetectedAt = 0;
+    lastPitchAnalysisAt = 0;
     setSoundControlUi(true);
-    showStatus('Sound control on: 15–50 dB controls strength 0–1.', 3200);
+    showStatus('Sound control on: volume controls strength; 50–250 Hz controls frequency.', 3600);
     return true;
   } catch (error) {
     console.error('Sound control could not start.', error);
@@ -327,12 +355,61 @@ function disableSoundControl() {
     microphoneStream = null;
   }
 
-  showStatus('Sound control off. Strength is manual.');
+  showStatus('Sound control off. Strength and frequency are manual.');
 }
 
 async function toggleSoundControl() {
   if (soundControlEnabled) disableSoundControl();
   else await enableSoundControl();
+}
+
+function detectDominantFrequencyHz() {
+  if (!soundAnalyser || !soundFrequencyData || !audioContext) return null;
+
+  soundAnalyser.getFloatFrequencyData(soundFrequencyData);
+  const binWidth = audioContext.sampleRate / soundAnalyser.fftSize;
+  const minBin = Math.max(1, Math.ceil(MIC_FREQ_MIN_HZ / binWidth));
+  const maxBin = Math.min(soundFrequencyData.length - 2, Math.floor(MIC_FREQ_MAX_HZ / binWidth));
+
+  let bestBin = -1;
+  let bestScore = 0;
+  let meanFundamentalAmplitude = 0;
+  let candidateCount = 0;
+
+  const amplitudeAt = (bin) => {
+    if (bin < 0 || bin >= soundFrequencyData.length) return 0;
+    return Math.pow(10, soundFrequencyData[bin] / 20);
+  };
+
+  for (let bin = minBin; bin <= maxBin; bin += 1) {
+    const fundamental = (amplitudeAt(bin - 1) + 2 * amplitudeAt(bin) + amplitudeAt(bin + 1)) / 4;
+    const harmonic2 = amplitudeAt(bin * 2);
+    const harmonic3 = amplitudeAt(bin * 3);
+    const score = fundamental + harmonic2 * 0.55 + harmonic3 * 0.28;
+
+    meanFundamentalAmplitude += fundamental;
+    candidateCount += 1;
+    if (score > bestScore) {
+      bestScore = score;
+      bestBin = bin;
+    }
+  }
+
+  if (bestBin < 0 || candidateCount === 0) return null;
+  meanFundamentalAmplitude /= candidateCount;
+
+  // Reject broadband noise or silence when no pitch stands clearly above the band floor.
+  if (bestScore < Math.max(meanFundamentalAmplitude * 2.2, 0.000035)) return null;
+
+  const left = soundFrequencyData[bestBin - 1];
+  const center = soundFrequencyData[bestBin];
+  const right = soundFrequencyData[bestBin + 1];
+  const denominator = left - 2 * center + right;
+  const offset = Math.abs(denominator) > 0.000001
+    ? THREE.MathUtils.clamp(0.5 * (left - right) / denominator, -0.5, 0.5)
+    : 0;
+
+  return THREE.MathUtils.clamp((bestBin + offset) * binWidth, MIC_FREQ_MIN_HZ, MIC_FREQ_MAX_HZ);
 }
 
 function updateSoundControl() {
@@ -354,6 +431,30 @@ function updateSoundControl() {
   strengthInput.value = strength.toFixed(2);
   strengthValue.value = `${Math.round(estimatedDb)} dB`;
   material.uniforms.uStrength.value = strength;
+
+  const now = performance.now();
+  if (now - lastPitchAnalysisAt >= PITCH_ANALYSIS_INTERVAL_MS) {
+    lastPitchAnalysisAt = now;
+    const detectedHz = detectDominantFrequencyHz();
+
+    if (detectedHz !== null && estimatedDb > MIC_MIN_DB + 1.5) {
+      const targetFrequency = (detectedHz - MIC_FREQ_MIN_HZ) / (MIC_FREQ_MAX_HZ - MIC_FREQ_MIN_HZ);
+      smoothedSoundFrequency = smoothedSoundFrequency * FREQUENCY_SMOOTHING
+        + targetFrequency * (1 - FREQUENCY_SMOOTHING);
+      smoothedSoundFrequency = THREE.MathUtils.clamp(smoothedSoundFrequency, 0, 1);
+      lastDetectedFrequencyHz = detectedHz;
+      lastPitchDetectedAt = now;
+    }
+  }
+
+  frequencyInput.value = smoothedSoundFrequency.toFixed(2);
+  material.uniforms.uFrequency.value = normalizedFrequencyToShader(smoothedSoundFrequency);
+
+  if (lastDetectedFrequencyHz !== null && now - lastPitchDetectedAt <= PITCH_HOLD_MS) {
+    frequencyValue.value = `${Math.round(lastDetectedFrequencyHz)} Hz`;
+  } else {
+    frequencyValue.value = '-- Hz';
+  }
 }
 
 function showStatus(message, duration = 2200) {
@@ -368,14 +469,16 @@ function setOutputs() {
     strengthValue.value = Number(strengthInput.value).toFixed(2);
   }
   radiusValue.value = Number(radiusInput.value).toFixed(2);
-  frequencyValue.value = Number(frequencyInput.value).toFixed(1);
+  if (!soundControlEnabled) {
+    frequencyValue.value = Number(frequencyInput.value).toFixed(2);
+  }
 }
 
 function updateUniforms() {
   if (!material) return;
   material.uniforms.uStrength.value = Number(strengthInput.value);
   material.uniforms.uRadius.value = Number(radiusInput.value);
-  material.uniforms.uFrequency.value = Number(frequencyInput.value);
+  material.uniforms.uFrequency.value = normalizedFrequencyToShader(frequencyInput.value);
   setOutputs();
 }
 
@@ -441,7 +544,7 @@ function initThree() {
       uCenter: { value: new THREE.Vector2(...defaults.center) },
       uStrength: { value: defaults.strength },
       uRadius: { value: defaults.radius },
-      uFrequency: { value: defaults.frequency },
+      uFrequency: { value: normalizedFrequencyToShader(defaults.frequency) },
       uMode: { value: defaults.mode },
       uTime: { value: 0 },
       uBefore: { value: 0 }
@@ -567,7 +670,7 @@ function randomize() {
   const mode = Math.floor(Math.random() * 4);
   if (!soundControlEnabled) strengthInput.value = (0.15 + Math.random() * 0.65).toFixed(2);
   radiusInput.value = (0.22 + Math.random() * 0.65).toFixed(2);
-  frequencyInput.value = (1.5 + Math.random() * 8.5).toFixed(1);
+  if (!soundControlEnabled) frequencyInput.value = Math.random().toFixed(2);
   setMode(mode);
   if (material) {
     material.uniforms.uCenter.value.set(
