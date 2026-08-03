@@ -10,13 +10,13 @@ The original **UNBUILDABLE — Prototype 01** remains a separate project. This f
 - When enabled, microphone level drives `STRENGTH` in real time.
 - The displayed range maps linearly as requested:
   - estimated `30 dB` → strength `0`
-  - estimated `80 dB` → strength `1`
+  - estimated `55 dB` → strength `1`
 - The strength slider becomes read-only while sound control is active and visibly follows the microphone.
 - The microphone level meter remains live while taking photos or recording video.
 - The existing video recorder reuses the same microphone stream, so sound-controlled visual changes and microphone audio can be recorded together.
 - Turning sound control off returns strength to manual slider control.
 
-**Important:** Web browsers expose digital microphone amplitude (dBFS), not calibrated real-world sound pressure level. The prototype applies a practical offset to show an estimated 30–80 dB range. Accurate SPL measurement would require per-device calibration or a native app.
+**Important:** Web browsers expose digital microphone amplitude (dBFS), not calibrated real-world sound pressure level. The prototype applies a practical offset to show an estimated 30–55 dB range. Accurate SPL measurement would require per-device calibration or a native app.
 
 ## Existing features
 

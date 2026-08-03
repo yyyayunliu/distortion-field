@@ -83,7 +83,7 @@ const defaults = {
 
 const MAX_RECORDING_MS = 30_000;
 const MIC_MIN_DB = 30;
-const MIC_MAX_DB = 80;
+const MIC_MAX_DB = 55;
 const MIC_DB_OFFSET = 90;
 const SOUND_SMOOTHING = 0.76;
 
@@ -305,7 +305,7 @@ async function enableSoundControl() {
     soundLevelData = new Float32Array(soundAnalyser.fftSize);
     smoothedSoundStrength = Number(strengthInput.value);
     setSoundControlUi(true);
-    showStatus('Sound control on: 30–80 dB controls strength 0–1.', 3200);
+    showStatus('Sound control on: 30–55 dB controls strength 0–1.', 3200);
     return true;
   } catch (error) {
     console.error('Sound control could not start.', error);
