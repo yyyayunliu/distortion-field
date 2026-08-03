@@ -16,6 +16,7 @@ The original **UNBUILDABLE — Prototype 01** remains a separate project. This f
 - The separate dB meter has been removed; while sound control is on, the `STRENGTH` value displays the live estimated dB reading.
 - The existing video recorder reuses the same microphone stream, so sound-controlled visual changes and microphone audio can be recorded together.
 - Turning sound control off returns strength to manual slider control.
+- Refined the control-panel layout: the live dB value stays on one line, all slider labels and values are left-aligned, slider tracks are shorter, and the panel container is fully transparent.
 
 **Important:** Web browsers expose digital microphone amplitude (dBFS), not calibrated real-world sound pressure level. The prototype applies a practical offset to show an estimated 15–50 dB range. Accurate SPL measurement would require per-device calibration or a native app.
 
